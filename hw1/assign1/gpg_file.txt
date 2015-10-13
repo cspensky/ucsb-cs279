@@ -1,0 +1,5 @@
+Chad Spensky (SecLab PGP Key) <cspensky@cs.ucsb.edu>
+http://cs.ucsb.edu/~cspensky/files/cspensky_gpg_key.pub
+http://cs.ucsb.edu/~cspensky/files/cspensky_ssh_key.pub
+Shortman
+9376195
