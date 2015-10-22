@@ -1,0 +1,152 @@
+Advanced Topics in Security Homework 2
+The homework assignments have to be turned in before on October 27, 2015,
+before class. All the assignments must be carried out individually.
+
+Read and understand the details of packaging and submission carefully! If you
+fail to comply to the guidelines your homework cannot be processed by the
+grading software (and as a consequence you don’t get credit for it).
+
+Assignment 1
+
+Develop a tool, called reflector, which reflects against an attacker’s host
+the attacker’s traffic. In order to do so, the tool is able to simulate two
+non-existent hosts, say victim and relayer, at both the Ethernet and IP
+levels. Whenever an attacker sends a packet to victim, the packet is
+intercepted by the reflector application and re-sent as a packet from
+relayer to the attacker’s host. The reply that is sent by the attacker’s
+host to relayer is then sent back as a packet from victim (in reply to the
+original packet) to the attacker’s host.
+
+This is an example of how this works. Suppose that the reflector application
+is running on host 192.168.1.10 and it is simulating:
+
+victim with Ethernet address 00:0A:0B:0C:11:37 and IP address 192.168.1.11;
+relayer with Ethernet address 00:0A:06:1B:AB:B0 and IP address 192.168.1.9.
+If host 128.111.48.69 (the attacker) sends a TCP SYN packet to host
+192.168.1.11, the reflector application will capture that packet and
+transform it in a TCP SYN packet from 192.168.1.9 to 128.111.48.69. If the
+attacker host responds with a SYN/ACK packet (or a RST packet) to
+192.168.1.9, then the reflector application will transform that packet in
+a packet from 192.168.1.11 to 128.111.48.69. This process is repeated
+until the application is stopped.
+
+You will have to sniff packets using libpcap. Also, you will have to spoof all
+the right ARP/IP packets that are needed to make it work reliably, using
+libnet.
+
+The application must be invoked with the following syntax:
+
+# reflector --victim-ip [IP Addr] --victim-ethernet [Ethernet Addr] \
+            --relayer-ip [IP Addr] --relayer-ethernet [Ethernet Addr]
+A non-default interface can be specified using the --interface command-line
+option. For example, in the example above, the invocation will be:
+
+# reflector --victim-ip 192.168.1.11 --victim-ethernet 00:0A:0B:0C:11:37 \
+            --relayer-ip 192.168.1.9 --relayer-ethernet 00:0A:06:1B:AB:B0
+Submission Instructions
+
+The reflector tool must be implemented as a single file, called
+reflector.c. This file must be compiled without errors or warnings with the
+following command line (on a host on the class testbed):
+
+% gcc -Wall reflector.c -o reflector -lpcap -lnet
+The compilation platform is the Linux system provided on the class testbed. If
+you need the sources of the libraries you can use
+libnet version 1.1.4
+and libpcap version 1.7.4.
+
+The C file should start with a comment with your name, and your email address,
+separated by comma. For example:
+
+/* John Doe, doe@cs.ucsb.edu */
+The submission process for this assignment uses the turnin package. Do a
+man turnin to find more info about this program. The name of the assignment
+is reflector.
+
+To submit:
+
+Create a directory whose name is your CS account. For example, user John Doe
+–whose account is jdoe– would do:
+% mkdir jdoe
+Put in the directory the files for this assignment.
+Execute the turnin program. For example, user jdoe would execute:
+% turnin reflector@cs279 jdoe
+You can execute turnin up to 10 times per project. Earlier versions will be
+discarded. The timestamp of turnin has to be before the due date.
+
+Assignment 2
+
+Develop a denial of service tool, called dnsblock, which sniffs the traffic
+on a segment and whenever it sees a DNS request to resolve one of the names
+in a list, it injects a spoofed DNS NX Domain reply.
+
+Your implementation of dnsblock will take, as a parameter, a file containing
+the list of hostnames to block. (option --list). Note that the tool is in a
+race with the legitimate DNS host. It is likely that many of the races will be 
+lost, and the tool, depending from the setup, might have limited effectiveness.
+However, the important thing is that a correct spoofed reply is generated, and
+not that the race is won.
+
+The tool must be implemented using Scapy.
+
+Submission Instructions
+
+The dnsblock tool must be implemented as a single file, called
+dnsblock.py.
+
+The source file should start with a comment with your name, and your email
+address, separated by comma. For example:
+/* John Doe, doe@cs.ucsb.edu */
+The submission process for this assignment uses the turnin package. Do a
+man turnin to find more info about this program. The name of the assignment
+is dnsblock.
+
+To submit:
+
+Create a directory whose name is your CS account. For example, user John Doe
+–whose account is jdoe– would do:
+% mkdir jdoe
+Put in the directory the files for this assignment.
+Execute the turnin program. For example, user jdoe would execute:
+% turnin dnsblock@cs279 jdoe
+You can execute turnin up to 10 times per project. Earlier versions will be
+discarded. The time-stamp of turnin has to be before the due date.
+
+Assignment 3
+
+You will have to break the security of the service called getcreds.
+
+The service listens for TCP connections to port 31337. If the
+connection comes from a trusted IP address (to be revealed in class), the
+service reads from the client a string that represents an IP address.
+
+Then, the supersecret credentials will be sent
+to the specified IP address with a UDP packet from/to port 31337.
+
+You need to find the contents of the supersecret credentials.
+
+Submission Instructions
+
+Create two files called README and EXPLOIT.
+
+The README file contains the secret that you discovered from the service and
+a description of how you broke the service (the description should contain
+also a reference/copy of any tool/code that you use to create the exploit).
+
+The EXPLOIT file contains the code that you used to connect service to
+retrieve the secret.
+
+The submission process for this assignment uses the turnin package. Do a
+man turnin to find more info about this program. The name of the assignment
+is getcreds.
+
+To submit:
+
+Create a directory whose name is your CS account. For example, user John
+Doe –whose account is jdoe– would do:
+% mkdir jdoe
+Put in the directory the files for the assignment.
+Execute the turnin program. For example, user jdoe would execute:
+% turnin getcreds@cs279 jdoe
+You can execute turnin up to 10 times per project. Earlier versions will be
+discarded. The timestamp of turnin has to be before the due date.
