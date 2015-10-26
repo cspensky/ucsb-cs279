@@ -2,7 +2,7 @@
  *
  *
  * Ref (Argp): https://www.gnu.org/software/libc/manual/html_node/Argp-Example-3.html#Argp-Example-3
-
+ * Ref: http://www.tenouk.com/Module43a.html
  *
  * */
 
@@ -26,7 +26,7 @@
 
 /* Ethernet addresses are 6 bytes */
 #define ETHER_ADDR_LEN	6
-
+#pragma pack(push, 1)
 /* Ethernet header */
 struct sniff_ethernet {
 	u_char ether_dhost[ETHER_ADDR_LEN]; /* Destination host address */
@@ -91,12 +91,15 @@ typedef struct arphdr {
 }arphdr_t;
 
 
+#pragma pack(pop)
+
 /* ethernet headers are always exactly 14 bytes */
 #define SIZE_ETHERNET 14
 #define ETH_ARP 0x0806
 #define ETH_IP 0x0800
 #define ARP_REQUEST 0x001   /* ARP Request             */
 #define ARP_REPLY 0x002     /* ARP Reply               */
+#define IP_TCP 0x06
 
 
 
@@ -104,6 +107,8 @@ typedef struct arphdr {
 int isValidMAC(const char* mac);
 int isValidIP(char *ipAddress);
 
+// Globals
+int VERBOSE = 0;
 const char *argp_program_version =
   "reflector 1.0a";
 const char *argp_program_bug_address =
@@ -243,6 +248,149 @@ int isValidMAC(const char* mac) {
     return (i == 12 && (s == 5 || s == 0));
 }
 
+/**
+ * TCP Checksum
+ *
+ */
+unsigned short tcp_checksum(unsigned short buff[], unsigned short len_tcp, unsigned short src_addr[],unsigned short dest_addr[])
+{
+    unsigned char prot_tcp=6; // Constant
+    unsigned long sum;
+    int nleft;
+    unsigned short *w;
+ 
+    sum = 0;
+    nleft = len_tcp;
+    w=buff;
+ 
+    /* calculate the checksum for the tcp header and payload */
+    while(nleft > 1)
+    {
+        sum += *w++;
+        nleft -= 2;
+    }
+ 
+    /* if nleft is 1 there ist still on byte left. We add a padding byte (0xFF) to build a 16bit word */
+    if(nleft>0)
+    {
+	    sum += *w&ntohs(0xFF00);   /* Thanks to Dalton */
+    }
+ 
+    // add the pseudo header
+    sum += src_addr[0];
+    sum += src_addr[1];
+    
+    sum += dest_addr[0];
+    sum += dest_addr[1];
+    
+    sum += htons(len_tcp);
+    sum += htons(prot_tcp);
+ 
+    // keep only the last 16 bits of the 32 bit calculated sum and add the carries
+    sum = (sum >> 16) + (sum & 0xFFFF);
+    sum += (sum >> 16);
+ 
+    // Take the one's complement of sum
+    sum = ~sum;
+ 
+	return ((unsigned short) sum);
+}
+/*
+uint16_t tcp_checksum(const void *buff, size_t len, in_addr_t src_addr, in_addr_t dest_addr)
+{
+        const uint16_t *buf=buff;
+        uint16_t *ip_src=(void *)&src_addr, *ip_dst=(void *)&dest_addr;
+        uint32_t sum;
+         size_t length=len;
+
+         // Calculate the sum                                            //
+        sum = 0;
+
+        printf("%04x\n",*ip_src);
+        printf("%04x\n",*(ip_src+2));
+        printf("%04x\n",*ip_dst);
+        printf("%04x\n",*(ip_dst+2));
+        printf("%04x\n",htons(IPPROTO_TCP));
+        printf("%04x\n",htons(length));
+
+        // Add the pseudo-header                                        //
+        sum += *(ip_src++);
+        sum += *ip_src;
+        sum += *(ip_dst++);
+        sum += *ip_dst;
+        sum += IPPROTO_TCP;
+        sum += htons(length);
+
+        for(sum=0; len>0; len-=2) {
+        	printf("%04x\n",*buf);
+        	sum += *buf++;
+        }
+		sum = (sum >> 16) + (sum &0xffff);
+		sum += (sum >> 16);
+
+//        while (len > 1)
+//        {
+//                sum += *buf++;
+//                if (sum & 0x80000000)
+//                         sum = (sum & 0xFFFF) + (sum >> 16);
+//                 len -= 2;
+//         }
+//
+//         if ( len & 1 )
+//                 // Add the padding if the packet lenght is odd          //
+//                 sum += *((uint8_t *)buf);
+//
+//
+//
+//         // Add the carries                                              //
+//         while (sum >> 16)
+//                 sum = (sum & 0xFFFF) + (sum >> 16);
+
+         // Return the one's complement of sum                           //
+         return ( (uint16_t)(~sum)  );
+}
+*/
+
+/**
+ * Update our checksum?
+ *
+ * Ref: http://www.tenouk.com/download/pdf/Module43.pdf
+ */
+unsigned short csum(unsigned short *buf, int len)
+{
+	unsigned long sum;
+	for(sum=0; len>0; len--)
+	sum += *buf++;
+	sum = (sum >> 16) + (sum &0xffff);
+	sum += (sum >> 16);
+	return (unsigned short)(~sum);
+}
+
+/**
+ * Update our IP checksum
+ */
+void update_checksum_ip(const struct sniff_ip* ip) {
+
+	// Zero out our checksum
+	int zero = 0;
+	memcpy((void *)&(ip->ip_sum), &zero, sizeof(ip->ip_sum));
+
+	// Calculate and update
+	int checksum = csum((unsigned short *)ip, sizeof(struct sniff_ip)/2);
+	memcpy((void *)&(ip->ip_sum), &checksum, sizeof(ip->ip_sum));
+}
+
+void update_checksum_tcp(struct sniff_tcp *tcp, in_addr_t src_addr, in_addr_t dest_addr, size_t length) {
+	// Zero out our checksum
+	int zero = 0;
+	memcpy((void *)&(tcp->th_sum), &zero, sizeof(tcp->th_sum));
+
+	// Calculate and update
+	int checksum = tcp_checksum((unsigned short *)tcp, length, (unsigned short *)&src_addr, (unsigned short *)&dest_addr);
+	memcpy((void *)&(tcp->th_sum), &checksum, sizeof(tcp->th_sum));
+
+}
+
 /*
  * IPs expected in network byte order
  */
@@ -314,7 +462,8 @@ int reflect_packets(in_addr_t victim_ip, unsigned char victim_mac[], in_addr_t r
 
 			// Reply to all ARP packets for both IPs to make us seem alive!
 			if (destip == victim_ip) {
-				printf("* Got an ARP for our target IP from %s. Replying... ", ip_src_str);
+				if (VERBOSE)
+					printf("* Got an ARP for our target IP from %s. Replying... ", ip_src_str);
 
 				// Make the packet a reply
 				arpheader->oper = htons(ARP_REPLY);
@@ -334,10 +483,12 @@ int reflect_packets(in_addr_t victim_ip, unsigned char victim_mac[], in_addr_t r
 				if ((sent = pcap_inject(handle,packet,header.len)) == -1) {
 					pcap_perror(handle,0);
 				}
-				printf("(Sent %d bytes)\n", sent);
+				if (VERBOSE)
+					printf("(Sent %d bytes)\n", sent);
 
-			} else if (ntohl(*arpheader->tpa) == relayer_ip) {
-				printf("* Got an ARP for our relayer IP from %s. Replying... ", ip_src_str);
+			} else if (destip == relayer_ip) {
+				if (VERBOSE)
+					printf("* Got an ARP for our relayer IP from %s. Replying... ", ip_src_str);
 
 				// Make the packet a reply
 				arpheader->oper = htons(ARP_REPLY);
@@ -357,7 +508,8 @@ int reflect_packets(in_addr_t victim_ip, unsigned char victim_mac[], in_addr_t r
 				if ((sent = pcap_inject(handle,packet,header.len)) == -1) {
 					pcap_perror(handle,0);
 				}
-				printf("(Sent %d bytes)\n", sent);
+				if (VERBOSE)
+					printf("(Sent %d bytes)\n", sent);
 			}
 
 
@@ -378,7 +530,8 @@ int reflect_packets(in_addr_t victim_ip, unsigned char victim_mac[], in_addr_t r
 
 			// Is this packet directed at our victim?
 			if (dest_ip == victim_ip) {
-				printf("Got an IP packet directed to our victim from %s. Relaying back... ",ip_dest_str);
+				if (VERBOSE)
+					printf("Got an IP packet directed to our victim from %s. Relaying back... ",ip_dest_str);
 
 				// Update our attacker info
 				memcpy((void *)attacker_mac, (void *)ethernet->ether_shost, sizeof(attacker_mac));
@@ -393,6 +546,14 @@ int reflect_packets(in_addr_t victim_ip, unsigned char victim_mac[], in_addr_t r
 				memcpy((void *)&(ip->ip_src.s_addr), (void *)&relayer_ip, sizeof(ip->ip_src.s_addr));
 				memcpy((void *)&(ip->ip_dst.s_addr), (void *)&attacker_ip, sizeof(ip->ip_dst.s_addr));
 
+				// Update our IP checksum!
+				update_checksum_ip(ip);
+
+				// Update TCP checksum!
+				if (ip->ip_p == IP_TCP) {
+					struct sniff_tcp* tcp = (struct sniff_tcp*)(packet + SIZE_ETHERNET + 20);
+					update_checksum_tcp(tcp, relayer_ip, attacker_ip, (header.len-SIZE_ETHERNET-20));
+				}
 
 				// replay this packet to it's source from our relayer
 				int sent = 0;
@@ -400,11 +561,13 @@ int reflect_packets(in_addr_t victim_ip, unsigned char victim_mac[], in_addr_t r
 					pcap_perror(handle,0);
 				}
 
-				printf("(Sent %d bytes)\n", sent);
+				if (VERBOSE)
+					printf("(Sent %d bytes)\n", sent);
 
 			} else if (dest_ip == relayer_ip) {
 				// If it comes to the relayer, just pass it to our attacker
-				printf("Got an IP packet directed to our relayer from %s. Relaying to attacker... ",ip_dest_str);
+				if (VERBOSE)
+					printf("Got an IP packet directed to our relayer from %s. Relaying to attacker... ",ip_dest_str);
 
 				// Update the fields for replaying this packet
 				//
@@ -415,13 +578,23 @@ int reflect_packets(in_addr_t victim_ip, unsigned char victim_mac[], in_addr_t r
 				memcpy((void *)&(ip->ip_src.s_addr), (void *)&victim_ip, sizeof(ip->ip_src.s_addr));
 				memcpy((void *)&(ip->ip_dst.s_addr), (void *)&attacker_ip, sizeof(ip->ip_dst.s_addr));
 
+				// Update our IP checksum!
+				update_checksum_ip(ip);
+
+				// Update TCP checksum!
+				if (ip->ip_p == IP_TCP) {
+					struct sniff_tcp* tcp = (struct sniff_tcp*)(packet + SIZE_ETHERNET + 20);
+					update_checksum_tcp(tcp, victim_ip, attacker_ip, (header.len-SIZE_ETHERNET-20));
+				}
+
 				// replay this packet to it's source from our relayer
 				int sent = 0;
 				if ((sent = pcap_inject(handle,packet,header.len)) == -1) {
 					pcap_perror(handle,0);
 				}
 
-				printf("(Sent %d bytes)\n", sent);
+				if (VERBOSE)
+					printf("(Sent %d bytes)\n", sent);
 			} // End if victim or relayer
 		} // end ip
 	} // end while
@@ -445,8 +618,8 @@ int main (int argc, char **argv) {
      be reflected in arguments. */
   argp_parse (&argp, argc, argv, 0, 0, &arguments);
 
-	printf ("iface = %s\nvictim_ip = %s\nvictim_mac = %s\nrelayer_ip = %s\n"
-		  "relayer_mac = %s\nVerbose = %s\n",
+	printf ("+------= TCP/IP Reflector =------+\n+ Interface: %s\n+ Victim IP: %s\n+ Victim MAC: %s\n+ Relayer IP: %s\n"
+		  "+ Relayer MAC: %s\n+ Verbose: %s\n+-------------------------------+\n",
 		  arguments.iface,
 		  arguments.victim_ip, arguments.victim_mac,
 		  arguments.relayer_ip,
@@ -471,6 +644,7 @@ int main (int argc, char **argv) {
 				(unsigned int *)&relayer_mac[4],
 				(unsigned int *)&relayer_mac[5]);
 
+	VERBOSE = arguments.verbose;
 	// Convert IPs to ints
 	in_addr_t victim_ip, relayer_ip;
 	inet_pton(AF_INET, arguments.victim_ip, &victim_ip);
