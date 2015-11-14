@@ -1,0 +1,15 @@
+# Command Injection Attacks (3)
+
+Since the program is just calling system with some linux functions (lines 59 and 66), we can trivially inject commands.
+
+The arguments -o -d and the environment variable DICTOEXT are all sources of input to these system calls
+
+# Memory Corruption Attacks (3)
+
+There are also numerous points in the code for memory corruption attacks
+
+Line 21: Allows an attacker to write an arbitrary amount of data into ``directory''  This one is a little tricky to exploit since you overwriting some data that the rest of main depends on, but definitely doable
+
+Line 24: Similarly, we can write an arbitrary amout of dat ato ``output''  This has the same problem with exploitability as Line 21, but again totally doable
+
+Line 46: Allows an overflow on the variable ``extensions'' that is more easily exploitable because of of its location on the stack. 

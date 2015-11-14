@@ -1,0 +1,9 @@
+# Command Inject Attacks (2)
+
+Because the output file is being passed to system with a > operator, we can trivally implement a command injection attack
+
+Simiarlly filenames are also just passed to system so a special filename &/bin/sh will spawn a shell
+
+# Memory Corruption Attacks
+
+I didn't see any memory corruption attacks

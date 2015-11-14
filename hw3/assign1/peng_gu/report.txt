@@ -1,0 +1,8 @@
+# Command Injection Attacks
+
+This program appeared to have no command injection attacks
+
+# Memory Corruption Attacks (1)
+
+While I did find 1 memory corruption attack, it seems to only be useful to create an infinite loop.  I don't immediately see anyway to obtain code execution at this point.
+This vulnerability stems from an incorrect that linux pathnaes are limited to 2048 characters (line 111), when in fact ext4 can have up to 4096.
